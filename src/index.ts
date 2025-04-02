@@ -67,15 +67,19 @@ async function batchTranslateWithClaude(
     .join("\n");
 
   const prompt = `แปลภาษาจากไฟล์ TH เป็น ${targetLang} ให้แปลตรงๆ ไม่ต้องมีอธิบายหรือตัวเลือกแปร ให้เลือกคำแปรที่เหมาะสมที่สุด สำหรับข้อความต่อไปนี้:\n\n${textsToTranslate}\n\nรูปแบบผลลัพธ์ให้เป็นแบบ key: "คำแปล" เหมือนข้อความข้างต้น`;
-
   console.log(`🔄 Batch translating ${keysAndTexts.length} keys...`);
 
+  console.log(`📦 Key Different: \n${textsToTranslate}`);
   const response = await anthropic.messages.create({
     model: "claude-3-haiku-20240307",
     max_tokens: 4000,
     temperature: 0.2,
     messages: [{ role: "user", content: prompt }],
   });
+
+  console.log(`========================================================\n`);
+  console.log(`📦 Generate: \n ${JSON.stringify(response.content, null, 2)}`);
+  console.log(`\n========================================================\n`);
 
   const content = response.content[0];
   if (!("text" in content)) {
