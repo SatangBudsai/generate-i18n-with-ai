@@ -10,31 +10,38 @@ const TARGET_LANGS = ["en"]; // เพิ่มภาษาเป้าหมา
 const args = process.argv.slice(2);
 const FORCE_WRITE = args.includes("--force");
 // กำหนดจำนวน keys สูงสุดที่จะส่งไปพร้อมกันในแต่ละครั้ง
-const MAX_BATCH_SIZE = 10;
+const MAX_BATCH_SIZE = 100;
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
 if (!apiKey) throw new Error("❌ Missing ANTHROPIC_API_KEY in environment");
 
 const anthropic = new Anthropic({ apiKey });
 
-function flatten(obj: any, prefix = ""): Record<string, string> {
-  return Object.entries(obj).reduce(
-    (acc: Record<string, string>, [key, value]) => {
-      const newKey = prefix ? `${prefix}.${key}` : key;
-      if (typeof value === "object" && value !== null) {
-        Object.assign(acc, flatten(value, newKey));
-      } else if (value !== undefined) {
-        acc[newKey] = String(value);
-      }
-      return acc;
-    },
-    {}
-  );
+// ฟังก์ชันแปลง object เป็น flat format แบบรักษาลำดับ keys
+function flatten(obj: any, prefix = ""): [string, string][] {
+  let result: [string, string][] = [];
+
+  // ใช้ Object.entries เพื่อเก็บลำดับของ keys ไว้
+  Object.entries(obj).forEach(([key, value]) => {
+    const newKey = prefix ? `${prefix}.${key}` : key;
+
+    if (typeof value === "object" && value !== null) {
+      // รวม arrays ของ nested objects
+      result = result.concat(flatten(value, newKey));
+    } else if (value !== undefined) {
+      // เพิ่ม key-value pair เข้าไปใน array
+      result.push([newKey, String(value)]);
+    }
+  });
+
+  return result;
 }
 
-function unflatten(flat: Record<string, string>) {
+// แปลง flat format กลับเป็น nested object แบบรักษาลำดับ
+function unflatten(flat: [string, string][]): Record<string, any> {
   const result: Record<string, any> = {};
-  for (const [key, value] of Object.entries(flat)) {
+
+  for (const [key, value] of flat) {
     const parts = key.split(".");
     parts.reduce((acc, part, idx) => {
       if (idx === parts.length - 1) {
@@ -45,25 +52,23 @@ function unflatten(flat: Record<string, string>) {
       return acc[part];
     }, result);
   }
+
   return result;
 }
 
-// ฟังก์ชันใหม่สำหรับการแปลหลาย key พร้อมกัน
+// ฟังก์ชันสำหรับการแปลหลาย key พร้อมกัน
 async function batchTranslateWithClaude(
-  keysToTexts: Record<string, string>,
+  keysAndTexts: [string, string][],
   targetLang: string
 ): Promise<Record<string, string>> {
   // สร้าง structure ของข้อความที่จะส่งไป
-  const textsToTranslate = Object.entries(keysToTexts)
+  const textsToTranslate = keysAndTexts
     .map(([key, text]) => `${key}: "${text}"`)
     .join("\n");
 
   const prompt = `แปลภาษาจากไฟล์ TH เป็น ${targetLang} ให้แปลตรงๆ ไม่ต้องมีอธิบายหรือตัวเลือกแปร ให้เลือกคำแปรที่เหมาะสมที่สุด สำหรับข้อความต่อไปนี้:\n\n${textsToTranslate}\n\nรูปแบบผลลัพธ์ให้เป็นแบบ key: "คำแปล" เหมือนข้อความข้างต้น`;
 
-  console.log("🚀 ~ prompt:", prompt);
-  console.log(
-    `🔄 Batch translating ${Object.keys(keysToTexts).length} keys...`
-  );
+  console.log(`🔄 Batch translating ${keysAndTexts.length} keys...`);
 
   const response = await anthropic.messages.create({
     model: "claude-3-haiku-20240307",
@@ -90,18 +95,16 @@ async function batchTranslateWithClaude(
       const key = match[1].trim();
       const translation = match[2].trim();
 
-      // ตรวจสอบว่า key มีอยู่ใน input หรือไม่
-      if (key in keysToTexts) {
-        results[key] = translation;
-      }
+      // เก็บผลลัพธ์
+      results[key] = translation;
     }
   }
 
-  // ตรวจสอบว่าได้ครบทุก key หรือไม่ ถ้าไม่ก็ใช้ข้อความต้นฉบับ
-  for (const key of Object.keys(keysToTexts)) {
+  // ตรวจสอบว่าได้ครบทุก key หรือไม่
+  for (const [key, text] of keysAndTexts) {
     if (!(key in results)) {
       console.warn(`⚠️ Missing translation for key: ${key}, using source text`);
-      results[key] = keysToTexts[key];
+      results[key] = text;
     }
   }
 
@@ -192,24 +195,22 @@ async function processTranslations() {
       // อ่านไฟล์ต้นฉบับภาษาไทย
       const thJSON = JSON.parse(fs.readFileSync(thPath, "utf-8"));
       const flatTH = flatten(thJSON);
-      const thKeys = Object.keys(flatTH);
+      const thKeys = flatTH.map(([key]) => key);
       console.log(`🇹🇭 Thai source: ${thKeys.length} keys`);
 
       // แปลไปยังภาษาเป้าหมายทั้งหมด
       for (const lang of TARGET_LANGS) {
         const langPath = path.join(folder, `${lang}.json`);
-        let existingFlat: Record<string, string> = {};
+        let existingFlatEntries: [string, string][] = [];
         let keysToTranslate: string[] = [];
         let keysToDelete: string[] = [];
-        let fileExists = false;
 
         // ตรวจสอบว่ามีไฟล์แปลอยู่แล้วหรือไม่
         if (fs.existsSync(langPath)) {
-          fileExists = true;
           try {
             const existingJSON = JSON.parse(fs.readFileSync(langPath, "utf-8"));
-            existingFlat = flatten(existingJSON);
-            const existingKeys = Object.keys(existingFlat);
+            existingFlatEntries = flatten(existingJSON);
+            const existingKeys = existingFlatEntries.map(([key]) => key);
 
             // หา key ที่ต้องแปลใหม่ (มีใน th แต่ไม่มีในไฟล์แปล)
             keysToTranslate = thKeys.filter(
@@ -227,6 +228,7 @@ async function processTranslations() {
           } catch (error) {
             console.error(`❌ Error reading ${lang}.json:`, error);
             keysToTranslate = thKeys; // ถ้าอ่านไฟล์ไม่ได้ ให้แปลใหม่ทั้งหมด
+            existingFlatEntries = [];
           }
         } else {
           // ถ้าไม่มีไฟล์แปล ให้แปลทุก key
@@ -246,22 +248,32 @@ async function processTranslations() {
           continue;
         }
 
-        // แปลเฉพาะ key ที่ต้องการ
-        const newFlat = { ...existingFlat };
+        // สร้าง map ของ key ที่มีอยู่แล้ว
+        const existingTranslations = Object.fromEntries(existingFlatEntries);
 
-        // ลบ key ที่ไม่มีในไฟล์ต้นฉบับ
+        // ลบ key ที่ไม่มีในไฟล์ต้นฉบับออกจาก existingTranslations
         keysToDelete.forEach((key) => {
-          delete newFlat[key];
+          delete existingTranslations[key];
         });
 
+        // สร้าง array ของ keys ที่ต้องการแปลพร้อม text
+        const keysToTranslateWithText: [string, string][] = [];
+        for (const key of keysToTranslate) {
+          const thText = flatTH.find(([k]) => k === key)?.[1] || "";
+          keysToTranslateWithText.push([key, thText]);
+        }
+
         // แปลเฉพาะ key ที่ต้องการ
-        if (keysToTranslate.length > 0) {
+        if (keysToTranslateWithText.length > 0) {
           console.log(
-            `🔄 Translating ${keysToTranslate.length} keys to ${lang}...`
+            `🔄 Translating ${keysToTranslateWithText.length} keys to ${lang}...`
           );
 
           // แบ่ง keys ที่ต้องแปลเป็น batch
-          const keyBatches = chunkIntoBatches(keysToTranslate, MAX_BATCH_SIZE);
+          const keyBatches = chunkIntoBatches(
+            keysToTranslateWithText,
+            MAX_BATCH_SIZE
+          );
           console.log(`📦 Split into ${keyBatches.length} batches`);
 
           // ประมวลผลแต่ละ batch
@@ -273,23 +285,17 @@ async function processTranslations() {
               } keys`
             );
 
-            // สร้าง map ของ key และข้อความที่ต้องแปล
-            const keysToTextsMap: Record<string, string> = {};
-            batch.forEach((key) => {
-              keysToTextsMap[key] = flatTH[key];
-            });
-
             try {
               // แปลทั้ง batch พร้อมกัน
               const translatedBatch = await batchTranslateWithClaude(
-                keysToTextsMap,
+                batch,
                 lang
               );
 
-              // นำผลลัพธ์ที่ได้มาใส่ในผลลัพธ์สุดท้าย
+              // เพิ่มผลลัพธ์ที่ได้เข้าไปใน existingTranslations
               Object.entries(translatedBatch).forEach(
                 ([key, translatedText]) => {
-                  newFlat[key] = translatedText;
+                  existingTranslations[key] = translatedText;
                 }
               );
             } catch (error) {
@@ -301,14 +307,13 @@ async function processTranslations() {
                   i + 1
                 }`
               );
-              for (const key of batch) {
+              for (const [key, thText] of batch) {
                 try {
                   console.log(
                     `  🔤 Individually translating: ${key.substring(0, 30)}${
                       key.length > 30 ? "..." : ""
                     }`
                   );
-                  const thText = flatTH[key];
                   const prompt = `แปลภาษาจากไฟล์ TH เป็น ${lang} ให้แปลตรงๆ ไม่ต้องมีอธิบายหรือตัวเลือกแปร ให้เลือกคำแปรที่เหมาะสมที่สุด:\n\n"${thText}"`;
 
                   const response = await anthropic.messages.create({
@@ -320,31 +325,39 @@ async function processTranslations() {
 
                   const content = response.content[0];
                   if ("text" in content) {
-                    newFlat[key] = content.text.trim().replace(/^"|"$/g, "");
+                    existingTranslations[key] = content.text
+                      .trim()
+                      .replace(/^"|"$/g, "");
                   } else {
-                    newFlat[key] = thText;
+                    existingTranslations[key] = thText;
                   }
                 } catch (innerError) {
                   console.error(`❌ Error translating key ${key}:`, innerError);
-                  newFlat[key] = flatTH[key]; // ใช้ข้อความเดิมถ้าแปลไม่สำเร็จ
+                  existingTranslations[key] = thText; // ใช้ข้อความเดิมถ้าแปลไม่สำเร็จ
                 }
               }
             }
           }
         }
 
+        // สร้าง ordered flat entries ตามลำดับเดียวกับไฟล์ th.json
+        const orderedFlatEntries: [string, string][] = [];
+        for (const [key] of flatTH) {
+          if (key in existingTranslations) {
+            orderedFlatEntries.push([key, existingTranslations[key]]);
+          }
+        }
+
         // เขียนไฟล์
         try {
-          const finalJSON = unflatten(newFlat);
+          const finalJSON = unflatten(orderedFlatEntries);
           fs.writeFileSync(
             langPath,
             JSON.stringify(finalJSON, null, 2),
             "utf-8"
           );
           console.log(
-            `✅ Successfully updated ${lang}.json with ${
-              Object.keys(newFlat).length
-            } keys`
+            `✅ Successfully updated ${lang}.json with ${orderedFlatEntries.length} keys`
           );
         } catch (error) {
           console.error(`❌ Error writing ${lang}.json:`, error);
