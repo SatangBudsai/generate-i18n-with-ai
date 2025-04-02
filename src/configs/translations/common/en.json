@@ -1,0 +1,13 @@
+{
+  "common": {
+    "hello": "Hello",
+    "goodbye": "Goodbye.",
+    "back": "Back",
+    "menu": {
+      "dashboard": "Dashboard",
+      "main": "Home",
+      "test": "Test"
+    },
+    "footer": "Footer"
+  }
+}
