@@ -1,0 +1,13 @@
+{
+  "common": {
+    "hello": "こんにちは",
+    "goodbye": "さようなら",
+    "back": "戻る",
+    "menu": {
+      "main": "メインページ",
+      "test": "テスト",
+      "dashboard": "分析ページ"
+    },
+    "footer": "フッター"
+  }
+}
