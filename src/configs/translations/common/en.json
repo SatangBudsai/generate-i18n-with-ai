@@ -4,9 +4,9 @@
     "goodbye": "Goodbye.",
     "back": "Back",
     "menu": {
-      "dashboard": "Dashboard",
       "main": "Home",
-      "test": "Test"
+      "test": "Test",
+      "dashboard": "Dashboard"
     },
     "footer": "Footer"
   }

@@ -1,23 +1,23 @@
 {
-  "name": "i18n-translator",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc",
-    "start": "ts-node src/index.ts"
+  "name": "translate-i18n-with-ai",
+  "version": "1.0.2",
+  "bin": {
+    "translate-i18n-with-ai": "dist/cli.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/cli.ts --format esm --out-dir dist --dts",
+    "dev": "tsup src/cli.ts",
+    "test": "npx tsx src/cli.ts"
+  },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
-    "dotenv": "^16.4.7"
+    "@anthropic-ai/sdk": "^0.x",
+    "dotenv": "^16.x"
   },
   "devDependencies": {
-    "@types/node": "^22.13.14",
     "ts-node": "^10.9.2",
+    "tsup": "^7.2.0",
+    "tsx": "^4.19.3",
     "typescript": "^5.8.2"
   }
 }
