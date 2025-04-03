@@ -5,7 +5,8 @@ import dotenv from "dotenv";
 dotenv.config();
 var CONFIG = {
   TRANSLATE_ROOT: process.env.TRANSLATE_ROOT || "src/configs/translations",
-  TARGET_LANGS: (process.env.TARGET_LANGS || "en").split(","),
+  SOURCE_LANG: process.env.SOURCE_LANG || "th",
+  TARGET_LANGS: (process.env.TARGET_LANGS || "en").split(",").map((lang) => lang.trim()),
   MAX_BATCH_SIZE: parseInt(process.env.MAX_BATCH_SIZE || "100"),
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || ""
 };
@@ -14,10 +15,11 @@ var CONFIG = {
 import { Anthropic } from "@anthropic-ai/sdk";
 import fs from "fs";
 import path from "path";
-var apiKey = CONFIG.ANTHROPIC_API_KEY;
 var TRANSLATE_ROOT = CONFIG.TRANSLATE_ROOT || "src/configs/translations";
+var SOURCE_LANG = CONFIG.SOURCE_LANG;
 var TARGET_LANGS = CONFIG.TARGET_LANGS || ["en"];
 var MAX_BATCH_SIZE = CONFIG.MAX_BATCH_SIZE;
+var apiKey = CONFIG.ANTHROPIC_API_KEY;
 var args = process.argv.slice(2);
 var FORCE_WRITE = args.includes("--force");
 if (!apiKey)
@@ -57,23 +59,14 @@ async function batchTranslateWithClaude(keysAndTexts, targetLang) {
 ${textsToTranslate}
 
 \u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E1C\u0E25\u0E25\u0E31\u0E1E\u0E18\u0E4C\u0E43\u0E2B\u0E49\u0E40\u0E1B\u0E47\u0E19\u0E41\u0E1A\u0E1A key: "\u0E04\u0E33\u0E41\u0E1B\u0E25" \u0E40\u0E2B\u0E21\u0E37\u0E2D\u0E19\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E02\u0E49\u0E32\u0E07\u0E15\u0E49\u0E19`;
-  console.log(`\u{1F504} Batch translating ${keysAndTexts.length} keys...`);
-  console.log(`========================================================
-`);
-  console.log(`\u{1F4E6} Key Different: 
-${textsToTranslate}`);
+  console.log(`\u{1F4E6} Key Different:`);
+  console.table(keysAndTexts.map(([key, text]) => ({ Key: key, Text: text })));
   const response = await anthropic.messages.create({
     model: "claude-3-haiku-20240307",
     max_tokens: 4e3,
     temperature: 0.2,
     messages: [{ role: "user", content: prompt }]
   });
-  console.log(`
-\u{1F4E6} Generate: 
- ${JSON.stringify(response.content, null, 2)}`);
-  console.log(`
-========================================================
-`);
   const content = response.content[0];
   if (!("text" in content)) {
     throw new Error("Unexpected response format from Claude");
@@ -89,6 +82,13 @@ ${textsToTranslate}`);
       results[key] = translation;
     }
   }
+  console.log(`\u{1F4E6} Key Generate:`);
+  console.table(
+    Object.entries(results).map(([key, text]) => ({
+      Key: key,
+      Translation: text
+    }))
+  );
   for (const [key, text] of keysAndTexts) {
     if (!(key in results)) {
       console.warn(`\u26A0\uFE0F Missing translation for key: ${key}, using source text`);
@@ -102,8 +102,10 @@ function findAllThJsonFolders(baseDir) {
   function recurse(currentPath) {
     try {
       const items = fs.readdirSync(currentPath, { withFileTypes: true });
-      const hasTh = items.some((i) => i.isFile() && i.name === "th.json");
-      if (hasTh) {
+      const hasSourceLang = items.some(
+        (i) => i.isFile() && i.name === `${SOURCE_LANG}.json`
+      );
+      if (hasSourceLang) {
         results.push(currentPath);
       }
       items.filter((i) => i.isDirectory()).forEach((dir) => recurse(path.join(currentPath, dir.name)));
@@ -151,7 +153,9 @@ async function processTranslations() {
     process.exit(1);
   }
   const folders = findAllThJsonFolders(TRANSLATE_ROOT);
-  console.log(`\u{1F4C1} Found ${folders.length} folders with th.json`);
+  console.log(
+    `\u{1F4C1} Found ${folders.length} folders with ${SOURCE_LANG.toUpperCase()}.json`
+  );
   if (folders.length === 0) {
     console.log(`Folders searched in: ${TRANSLATE_ROOT}`);
     console.log(`Current working directory: ${process.cwd()}`);
@@ -163,14 +167,16 @@ async function processTranslations() {
       console.log(`\u23ED\uFE0F Skipping ${identifier} - not selected`);
       continue;
     }
-    const thPath = path.join(folder, "th.json");
-    console.log(`
-\u{1F504} Processing: ${identifier}`);
+    console.log(`==========================================================`);
+    const sourcePath = path.join(folder, `${SOURCE_LANG}.json`);
+    console.log(`\u{1F53D} Processing: ${identifier}`);
     try {
-      const thJSON = JSON.parse(fs.readFileSync(thPath, "utf-8"));
-      const flatTH = flatten(thJSON);
-      const thKeys = flatTH.map(([key]) => key);
-      console.log(`\u{1F1F9}\u{1F1ED} Thai source: ${thKeys.length} keys`);
+      const sourceJSON = JSON.parse(fs.readFileSync(sourcePath, "utf-8"));
+      const flatSource = flatten(sourceJSON);
+      const sourceKeys = flatSource.map(([key]) => key);
+      console.log(
+        `${SOURCE_LANG.toUpperCase()} source: ${sourceKeys.length} keys`
+      );
       for (const lang of TARGET_LANGS) {
         const langPath = path.join(folder, `${lang}.json`);
         let existingFlatEntries = [];
@@ -181,26 +187,28 @@ async function processTranslations() {
             const existingJSON = JSON.parse(fs.readFileSync(langPath, "utf-8"));
             existingFlatEntries = flatten(existingJSON);
             const existingKeys = existingFlatEntries.map(([key]) => key);
-            keysToTranslate = thKeys.filter(
+            keysToTranslate = sourceKeys.filter(
               (key) => !existingKeys.includes(key)
             );
-            keysToDelete = existingKeys.filter((key) => !thKeys.includes(key));
+            keysToDelete = existingKeys.filter(
+              (key) => !sourceKeys.includes(key)
+            );
             console.log(
               `\u{1F310} ${lang.toUpperCase()}: Found ${existingKeys.length} keys, ${keysToTranslate.length} new keys to translate, ${keysToDelete.length} keys to remove`
             );
           } catch (error) {
             console.error(`\u274C Error reading ${lang}.json:`, error);
-            keysToTranslate = thKeys;
+            keysToTranslate = sourceKeys;
             existingFlatEntries = [];
           }
         } else {
-          keysToTranslate = thKeys;
+          keysToTranslate = sourceKeys;
           console.log(
-            `\u{1F310} ${lang}: No existing file, will translate all ${thKeys.length} keys`
+            `\u{1F310} ${lang.toUpperCase()}: No existing file, will translate all ${sourceKeys.length} keys`
           );
         }
         if (keysToTranslate.length === 0 && keysToDelete.length === 0 && !FORCE_WRITE) {
-          console.log(`\u2705 No changes needed for ${lang}`);
+          console.log(`\u2796 No changes needed for ${lang}`);
           continue;
         }
         const existingTranslations = Object.fromEntries(existingFlatEntries);
@@ -209,23 +217,16 @@ async function processTranslations() {
         });
         const keysToTranslateWithText = [];
         for (const key of keysToTranslate) {
-          const thText = flatTH.find(([k]) => k === key)?.[1] || "";
+          const thText = flatSource.find(([k]) => k === key)?.[1] || "";
           keysToTranslateWithText.push([key, thText]);
         }
         if (keysToTranslateWithText.length > 0) {
-          console.log(
-            `\u{1F504} Translating ${keysToTranslateWithText.length} keys to ${lang}...`
-          );
           const keyBatches = chunkIntoBatches(
             keysToTranslateWithText,
             MAX_BATCH_SIZE
           );
-          console.log(`\u{1F4E6} Split into ${keyBatches.length} batches`);
           for (let i = 0; i < keyBatches.length; i++) {
             const batch = keyBatches[i];
-            console.log(
-              `\u{1F4E6} Processing batch ${i + 1}/${keyBatches.length} with ${batch.length} keys`
-            );
             try {
               const translatedBatch = await batchTranslateWithClaude(
                 batch,
@@ -270,7 +271,7 @@ async function processTranslations() {
           }
         }
         const orderedFlatEntries = [];
-        for (const [key] of flatTH) {
+        for (const [key] of flatSource) {
           if (key in existingTranslations) {
             orderedFlatEntries.push([key, existingTranslations[key]]);
           }
@@ -282,9 +283,6 @@ async function processTranslations() {
             JSON.stringify(finalJSON, null, 2),
             "utf-8"
           );
-          console.log(
-            `\u2705 Successfully updated ${lang}.json with ${orderedFlatEntries.length} keys`
-          );
         } catch (error) {
           console.error(`\u274C Error writing ${lang}.json:`, error);
         }
@@ -293,7 +291,7 @@ async function processTranslations() {
       console.error(`\u274C Error processing folder ${folder}:`, error);
     }
   }
-  console.log("\n\u{1F389} Translation process completed!");
+  console.log("\n\u2705 Translation process completed!");
 }
 processTranslations().catch((error) => {
   console.error("\u274C Script failed with error:", error);
