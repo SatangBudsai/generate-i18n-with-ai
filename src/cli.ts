@@ -4,10 +4,11 @@ import { Anthropic } from "@anthropic-ai/sdk";
 import fs from "fs";
 import path from "path";
 
-const apiKey = CONFIG.ANTHROPIC_API_KEY;
 const TRANSLATE_ROOT = CONFIG.TRANSLATE_ROOT || "src/configs/translations";
-const TARGET_LANGS = CONFIG.TARGET_LANGS || ["en"]; // เพิ่มภาษาเป้าหมายอื่นๆ ได้ที่นี่
+const SOURCE_LANG = CONFIG.SOURCE_LANG;
+const TARGET_LANGS = CONFIG.TARGET_LANGS || ["en"];
 const MAX_BATCH_SIZE = CONFIG.MAX_BATCH_SIZE;
+const apiKey = CONFIG.ANTHROPIC_API_KEY;
 const args = process.argv.slice(2);
 const FORCE_WRITE = args.includes("--force");
 
@@ -65,19 +66,16 @@ async function batchTranslateWithClaude(
     .join("\n");
 
   const prompt = `แปลภาษาจากไฟล์ TH เป็น ${targetLang} ให้แปลตรงๆ ไม่ต้องมีอธิบายหรือตัวเลือกแปร ให้เลือกคำแปรที่เหมาะสมที่สุด สำหรับข้อความต่อไปนี้:\n\n${textsToTranslate}\n\nรูปแบบผลลัพธ์ให้เป็นแบบ key: "คำแปล" เหมือนข้อความข้างต้น`;
-  console.log(`🔄 Batch translating ${keysAndTexts.length} keys...`);
 
-  console.log(`========================================================\n`);
-  console.log(`📦 Key Different: \n${textsToTranslate}`);
+  console.log(`📦 Key Different:`);
+  console.table(keysAndTexts.map(([key, text]) => ({ Key: key, Text: text })));
+
   const response = await anthropic.messages.create({
     model: "claude-3-haiku-20240307",
     max_tokens: 4000,
     temperature: 0.2,
     messages: [{ role: "user", content: prompt }],
   });
-
-  console.log(`\n📦 Generate: \n ${JSON.stringify(response.content, null, 2)}`);
-  console.log(`\n========================================================\n`);
 
   const content = response.content[0];
   if (!("text" in content)) {
@@ -96,11 +94,17 @@ async function batchTranslateWithClaude(
     if (match && match.length >= 3) {
       const key = match[1].trim();
       const translation = match[2].trim();
-
-      // เก็บผลลัพธ์
       results[key] = translation;
     }
   }
+
+  console.log(`📦 Key Generate:`);
+  console.table(
+    Object.entries(results).map(([key, text]) => ({
+      Key: key,
+      Translation: text,
+    }))
+  );
 
   // ตรวจสอบว่าได้ครบทุก key หรือไม่
   for (const [key, text] of keysAndTexts) {
@@ -118,8 +122,10 @@ function findAllThJsonFolders(baseDir: string): string[] {
   function recurse(currentPath: string) {
     try {
       const items = fs.readdirSync(currentPath, { withFileTypes: true });
-      const hasTh = items.some((i) => i.isFile() && i.name === "th.json");
-      if (hasTh) {
+      const hasSourceLang = items.some(
+        (i) => i.isFile() && i.name === `${SOURCE_LANG}.json`
+      );
+      if (hasSourceLang) {
         results.push(currentPath);
       }
       items
@@ -174,7 +180,9 @@ async function processTranslations() {
   }
 
   const folders = findAllThJsonFolders(TRANSLATE_ROOT);
-  console.log(`📁 Found ${folders.length} folders with th.json`);
+  console.log(
+    `📁 Found ${folders.length} folders with ${SOURCE_LANG.toUpperCase()}.json`
+  );
 
   if (folders.length === 0) {
     console.log(`Folders searched in: ${TRANSLATE_ROOT}`);
@@ -190,15 +198,18 @@ async function processTranslations() {
       continue;
     }
 
-    const thPath = path.join(folder, "th.json");
-    console.log(`\n🔄 Processing: ${identifier}`);
+    console.log(`==========================================================`);
+    const sourcePath = path.join(folder, `${SOURCE_LANG}.json`);
+    console.log(`🔽 Processing: ${identifier}`);
 
     try {
       // อ่านไฟล์ต้นฉบับภาษาไทย
-      const thJSON = JSON.parse(fs.readFileSync(thPath, "utf-8"));
-      const flatTH = flatten(thJSON);
-      const thKeys = flatTH.map(([key]) => key);
-      console.log(`🇹🇭 Thai source: ${thKeys.length} keys`);
+      const sourceJSON = JSON.parse(fs.readFileSync(sourcePath, "utf-8"));
+      const flatSource = flatten(sourceJSON);
+      const sourceKeys = flatSource.map(([key]) => key);
+      console.log(
+        `${SOURCE_LANG.toUpperCase()} source: ${sourceKeys.length} keys`
+      );
 
       // แปลไปยังภาษาเป้าหมายทั้งหมด
       for (const lang of TARGET_LANGS) {
@@ -215,12 +226,14 @@ async function processTranslations() {
             const existingKeys = existingFlatEntries.map(([key]) => key);
 
             // หา key ที่ต้องแปลใหม่ (มีใน th แต่ไม่มีในไฟล์แปล)
-            keysToTranslate = thKeys.filter(
+            keysToTranslate = sourceKeys.filter(
               (key) => !existingKeys.includes(key)
             );
 
             // หา key ที่ต้องลบ (มีในไฟล์แปลแต่ไม่มีใน th)
-            keysToDelete = existingKeys.filter((key) => !thKeys.includes(key));
+            keysToDelete = existingKeys.filter(
+              (key) => !sourceKeys.includes(key)
+            );
 
             console.log(
               `🌐 ${lang.toUpperCase()}: Found ${existingKeys.length} keys, ${
@@ -229,14 +242,16 @@ async function processTranslations() {
             );
           } catch (error) {
             console.error(`❌ Error reading ${lang}.json:`, error);
-            keysToTranslate = thKeys; // ถ้าอ่านไฟล์ไม่ได้ ให้แปลใหม่ทั้งหมด
+            keysToTranslate = sourceKeys; // ถ้าอ่านไฟล์ไม่ได้ ให้แปลใหม่ทั้งหมด
             existingFlatEntries = [];
           }
         } else {
           // ถ้าไม่มีไฟล์แปล ให้แปลทุก key
-          keysToTranslate = thKeys;
+          keysToTranslate = sourceKeys;
           console.log(
-            `🌐 ${lang}: No existing file, will translate all ${thKeys.length} keys`
+            `🌐 ${lang.toUpperCase()}: No existing file, will translate all ${
+              sourceKeys.length
+            } keys`
           );
         }
 
@@ -246,7 +261,7 @@ async function processTranslations() {
           keysToDelete.length === 0 &&
           !FORCE_WRITE
         ) {
-          console.log(`✅ No changes needed for ${lang}`);
+          console.log(`➖ No changes needed for ${lang}`);
           continue;
         }
 
@@ -261,31 +276,21 @@ async function processTranslations() {
         // สร้าง array ของ keys ที่ต้องการแปลพร้อม text
         const keysToTranslateWithText: [string, string][] = [];
         for (const key of keysToTranslate) {
-          const thText = flatTH.find(([k]) => k === key)?.[1] || "";
+          const thText = flatSource.find(([k]) => k === key)?.[1] || "";
           keysToTranslateWithText.push([key, thText]);
         }
 
         // แปลเฉพาะ key ที่ต้องการ
         if (keysToTranslateWithText.length > 0) {
-          console.log(
-            `🔄 Translating ${keysToTranslateWithText.length} keys to ${lang}...`
-          );
-
           // แบ่ง keys ที่ต้องแปลเป็น batch
           const keyBatches = chunkIntoBatches(
             keysToTranslateWithText,
             MAX_BATCH_SIZE
           );
-          console.log(`📦 Split into ${keyBatches.length} batches`);
 
           // ประมวลผลแต่ละ batch
           for (let i = 0; i < keyBatches.length; i++) {
             const batch = keyBatches[i];
-            console.log(
-              `📦 Processing batch ${i + 1}/${keyBatches.length} with ${
-                batch.length
-              } keys`
-            );
 
             try {
               // แปลทั้ง batch พร้อมกัน
@@ -344,7 +349,7 @@ async function processTranslations() {
 
         // สร้าง ordered flat entries ตามลำดับเดียวกับไฟล์ th.json
         const orderedFlatEntries: [string, string][] = [];
-        for (const [key] of flatTH) {
+        for (const [key] of flatSource) {
           if (key in existingTranslations) {
             orderedFlatEntries.push([key, existingTranslations[key]]);
           }
@@ -358,9 +363,6 @@ async function processTranslations() {
             JSON.stringify(finalJSON, null, 2),
             "utf-8"
           );
-          console.log(
-            `✅ Successfully updated ${lang}.json with ${orderedFlatEntries.length} keys`
-          );
         } catch (error) {
           console.error(`❌ Error writing ${lang}.json:`, error);
         }
@@ -370,7 +372,7 @@ async function processTranslations() {
     }
   }
 
-  console.log("\n🎉 Translation process completed!");
+  console.log("\n✅ Translation process completed!");
 }
 
 // เริ่มกระบวนการแปลภาษา

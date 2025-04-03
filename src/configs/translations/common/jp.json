@@ -4,9 +4,9 @@
     "goodbye": "さようなら",
     "back": "戻る",
     "menu": {
-      "main": "メインページ",
+      "main": "ホーム",
       "test": "テスト",
-      "dashboard": "分析ページ"
+      "dashboard": "ダッシュボード"
     },
     "footer": "フッター"
   }

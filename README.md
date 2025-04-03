@@ -34,9 +34,11 @@ Create a `.env` file in your project root with the following variables:
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 
 # Optional (with defaults shown)
-TRANSLATE_ROOT=src/configs/translations
-TARGET_LANGS=en (multiple languages separated by commas: en, jp, th)
-MAX_BATCH_SIZE=100
+TRANSLATE_ROOT="src/configs/translations"
+SOURCE_LANG="th"
+TARGET_LANGS="en"
+# (Multiple languages separated by commas: "en, jp, th")
+MAX_BATCH_SIZE="100"
 ```
 
 ### Configuration Options

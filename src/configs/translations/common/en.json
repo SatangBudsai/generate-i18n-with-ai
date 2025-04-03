@@ -1,7 +1,7 @@
 {
   "common": {
     "hello": "Hello",
-    "goodbye": "Goodbye.",
+    "goodbye": "Goodbye",
     "back": "Back",
     "menu": {
       "main": "Home",
