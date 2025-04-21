@@ -1,6 +1,6 @@
 {
   "name": "translate-i18n-with-ai",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "bin": {
     "translate-i18n-with-ai": "dist/cli.js"
   },
