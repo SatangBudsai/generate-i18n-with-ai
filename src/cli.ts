@@ -9,7 +9,7 @@ const SOURCE_LANG = CONFIG.SOURCE_LANG;
 const TARGET_LANGS = CONFIG.TARGET_LANGS || ["en"];
 const MAX_BATCH_SIZE = CONFIG.MAX_BATCH_SIZE;
 const apiKey = CONFIG.ANTHROPIC_API_KEY;
-const FOLDER_STRUCTURE = CONFIG.FOLDER_STRUCTURE || "nested"; // "nested" หรือ "language-first"
+const FOLDER_STRUCTURE = CONFIG.FOLDER_STRUCTURE || "language-first"; //  "language-first" or "nested"
 const args = process.argv.slice(2);
 const FORCE_WRITE = args.includes("--force");
 
@@ -178,7 +178,7 @@ function findAllLanguageFirstJsonFiles(baseDir: string): Array<{
             : fileName;
           const fileIdentifier = relativeFilePath
             .replace(/\.json$/, "")
-            .replace(/[\\/]/g, "_");
+            .replace(/[\\/]/g, "/"); // เปลี่ยนจาก "_" เป็น "/"
           const sourcePath = path.join(currentDir, fileName);
 
           // สร้าง path สำหรับภาษาเป้าหมายทั้งหมด
@@ -224,16 +224,18 @@ function findAllLanguageFirstJsonFiles(baseDir: string): Array<{
   return results;
 }
 
+// เปลี่ยนฟังก์ชัน pathToIdentifier ให้ใช้ / แทน _
 function pathToIdentifier(fullPath: string): string {
   const relativePath = fullPath.replace(TRANSLATE_ROOT + path.sep, "");
-  return relativePath.replace(/\\/g, "_").replace(/\//g, "_");
+  return relativePath.replace(/\\/g, "/").replace(/\//g, "/");
 }
 
-// เพิ่มฟังก์ชันสำหรับสร้าง identifier จากเส้นทางเชิงสัมพัทธ์
+// เพิ่มฟังก์ชันสำหรับสร้าง identifier จากเส้นทางเชิงสัมพัทธ์ ให้ใช้ / แทน _
 function relativePathToIdentifier(relativePath: string): string {
-  return relativePath.replace(/\\/g, "_").replace(/\//g, "_");
+  return relativePath.replace(/\\/g, "/").replace(/\//g, "/");
 }
 
+// ปรับฟังก์ชัน isPathSelected ให้ใช้ / แทน _
 function isPathSelected(identifier: string): boolean {
   if (args.length === 0) return true;
 
@@ -243,11 +245,11 @@ function isPathSelected(identifier: string): boolean {
       if (part === identifier) return true;
 
       // ตรวจสอบแต่ละส่วนของ identifier
-      const parts = identifier.split("_");
+      const parts = identifier.split("/");
       if (parts.includes(part)) return true;
 
       // ตรวจสอบ nested path
-      if (identifier.includes(`_${part}_`) || identifier.endsWith(`_${part}`))
+      if (identifier.includes(`/${part}/`) || identifier.endsWith(`/${part}`))
         return true;
 
       return false;

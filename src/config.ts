@@ -21,7 +21,7 @@ export const CONFIG = {
   MAX_BATCH_SIZE: parseInt(process.env.MAX_BATCH_SIZE || "20"),
 
   // รูปแบบของโครงสร้างโฟลเดอร์:
-  // - "nested" (แบบเดิม) - โฟลเดอร์แบบเดิมที่มีไฟล์ภาษาอยู่ในโฟลเดอร์เดียวกัน (th.json, en.json)
-  // - "language-first" (แบบใหม่) - โฟลเดอร์แยกตามภาษา (/th/common.json, /en/common.json) สามารถมีโฟลเดอร์ย่อยได้
-  FOLDER_STRUCTURE: process.env.FOLDER_STRUCTURE || "nested",
+  // - "language-first" - โฟลเดอร์แยกตามภาษา (/th/common.json, /en/common.json) สามารถมีโฟลเดอร์ย่อยได้
+  // - "nested" - โฟลเดอร์แบบเดิมที่มีไฟล์ภาษาอยู่ในโฟลเดอร์เดียวกัน (th.json, en.json)
+  FOLDER_STRUCTURE: process.env.FOLDER_STRUCTURE || "language-first",
 };
