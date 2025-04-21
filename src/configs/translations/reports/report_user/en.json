@@ -1,0 +1,18 @@
+{
+  "reportUser": {
+    "title": "Report",
+    "description": "User report",
+    "usage": {
+      "title": "Usage",
+      "description": "User usage"
+    },
+    "performance": {
+      "title": "Performance",
+      "description": "System performance"
+    },
+    "errors": {
+      "title": "Errors",
+      "description": "Occurred errors"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "reportUser": {
+    "title": "รายงาน",
+    "description": "รายงานการใช้งาน",
+    "usage": {
+      "title": "การใช้งาน",
+      "description": "การใช้งานของผู้ใช้"
+    },
+    "performance": {
+      "title": "ประสิทธิภาพ",
+      "description": "ประสิทธิภาพของระบบ"
+    },
+    "errors": {
+      "title": "ข้อผิดพลาด",
+      "description": "ข้อผิดพลาดที่เกิดขึ้น"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "reportDashboard": {
+    "title": "รายงาน",
+    "description": "รายงานการใช้งาน",
+    "report": {
+      "title": "รายงาน",
+      "description": "รายงานการใช้งาน",
+      "total": {
+        "title": "รวมทั้งหมด",
+        "description": "รวมทั้งหมด"
+      },
+      "byUser": {
+        "title": "ตามผู้ใช้",
+        "description": "ตามผู้ใช้"
+      },
+      "byDate": {
+        "title": "ตามวันที่",
+        "description": "ตามวันที่"
+      }
+    }
+  }
+}
