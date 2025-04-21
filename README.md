@@ -1,6 +1,6 @@
 # translate-i18n-with-ai
 
-A powerful CLI tool for automatically translating i18n JSON files using Claude AI models by Anthropic. This tool is designed to efficiently handle translations from Thai (th.json) to multiple target languages while preserving the structure and ordering of your translation keys.
+A powerful CLI tool for automatically translating i18n JSON files using Claude AI models by Anthropic. This tool is designed to efficiently handle translations from Thai (th) to multiple target languages while preserving the structure and ordering of your translation keys.
 
 ## Features
 
@@ -10,6 +10,7 @@ A powerful CLI tool for automatically translating i18n JSON files using Claude A
 - 📦 Handles batch processing for efficient API usage
 - 🌐 Supports multiple target languages
 - 🔍 Selective directory processing with command arguments
+- ⚙️ Supports both nested and language-first folder structures
 
 ## Installation
 
@@ -27,7 +28,7 @@ yarn add --dev translate-i18n-with-ai
 
 ## Configuration
 
-Create a `.env` file in your project root with the following variables:
+Create a `.env` file in your project root or configure the following environment variables:
 
 ```env
 # Required
@@ -36,9 +37,14 @@ ANTHROPIC_API_KEY=your_anthropic_api_key_here
 # Optional (with defaults shown)
 TRANSLATE_ROOT="src/configs/translations"
 SOURCE_LANG="th"
+
+# (Multiple languages separated by commas: "en,jp,zh")
 TARGET_LANGS="en"
-# (Multiple languages separated by commas: "en, jp, th")
+
 MAX_BATCH_SIZE="100"
+
+# Options: "language-first" or "nested"
+FOLDER_STRUCTURE="language-first" 
 ```
 
 ### Configuration Options
@@ -47,17 +53,27 @@ MAX_BATCH_SIZE="100"
 | ------------------- | ----------------------------------------------------- | -------------------------- |
 | `ANTHROPIC_API_KEY` | Your Anthropic API key for Claude access              | (Required)                 |
 | `TRANSLATE_ROOT`    | Root directory containing translation files           | `src/configs/translations` |
+| `SOURCE_LANG`       | Source language code                                  | `th`                       |
 | `TARGET_LANGS`      | Comma-separated list of target language codes         | `en`                       |
 | `MAX_BATCH_SIZE`    | Maximum number of keys to translate in a single batch | `100`                      |
+| `FOLDER_STRUCTURE`  | Folder structure format for translations              | `language-first`           |
 
 ## Usage
 
 ### Basic Usage
 
-Run the translation process for all directories containing `th.json` files:
+Run the translation process for all files:
 
 ```bash
 npx translate-i18n-with-ai
+```
+
+### Selective Translation
+
+Run the translation process for specific directories or files:
+
+```bash
+npx translate-i18n-with-ai components/header components/footer
 ```
 
 ### Using with npm scripts
@@ -66,7 +82,7 @@ Add to your `package.json`:
 
 ```json
 "scripts": {
-  "translate": "translate-i18n-with-ai"
+  "translate": "npx translate-i18n-with-ai"
 }
 ```
 
@@ -76,9 +92,28 @@ Then run:
 npm run translate
 ```
 
-## Directory Structure
+## Directory Structures
 
-The tool expects the following directory structure:
+The tool supports two folder structures:
+
+### 1. Language-first Structure (Default)
+
+```
+TRANSLATE_ROOT/
+├── th/
+│   ├── common.json
+│   ├── components/
+│   │   ├── header.json
+│   │   └── footer.json
+├── en/
+│   ├── common.json
+│   ├── components/
+│   │   ├── header.json
+│   │   └── footer.json
+└── ...
+```
+
+### 2. Nested Structure
 
 ```
 TRANSLATE_ROOT/
@@ -91,12 +126,10 @@ TRANSLATE_ROOT/
 └── ...
 ```
 
-Each directory should contain a `th.json` file with the source Thai translations. The tool will generate or update corresponding files for each target language (e.g., `en.json`, `fr.json`, etc.).
-
 ## How It Works
 
-1. **Discovery**: Finds all directories containing `th.json` files within `TRANSLATE_ROOT`
-2. **Analysis**: For each directory, compares existing target language files with the source `th.json`
+1. **Discovery**: Finds all translation files within the source language directory
+2. **Analysis**: Compares existing target language files with the source files
 3. **Translation**:
    - Identifies new keys that need translation
    - Identifies obsolete keys that should be removed
@@ -113,10 +146,6 @@ Each directory should contain a `th.json` file with the source Thai translations
     "welcome": "ยินดีต้อนรับ",
     "login": "เข้าสู่ระบบ",
     "signup": "สมัครสมาชิก"
-  },
-  "dashboard": {
-    "title": "แดชบอร์ด",
-    "summary": "สรุป"
   }
 }
 ```
@@ -129,17 +158,13 @@ Each directory should contain a `th.json` file with the source Thai translations
     "welcome": "Welcome",
     "login": "Login",
     "signup": "Sign up"
-  },
-  "dashboard": {
-    "title": "Dashboard",
-    "summary": "Summary"
   }
 }
 ```
 
 ## Best Practices
 
-- Keep your source `th.json` files well-organized with logical groupings
+- Keep your source JSON files well-organized with logical groupings
 - Use descriptive keys that provide context for better translations
 - Run translations regularly as you update source files
 - Review generated translations for quality and consistency
